@@ -1,45 +1,64 @@
 import fs from 'fs';
 import path from 'path';
+import { Log } from '../../../MiddlewareLogger';
 
-const STORAGE_FILE = path.join(__dirname, '../data/urls.json');
+const STORE_FILE = path.join(__dirname, '../../url-store.json');
 
-// Ensure data directory exists
-const ensureDataDir = () => {
-  const dir = path.dirname(STORAGE_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-};
+interface UrlData {
+  originalUrl: string;
+  visits: number;
+  referers: string[];
+  timestamps: string[];
+  expiresAt: string;
+}
 
-// Initialize storage with empty data if file doesn't exist
-const initializeStorage = () => {
-  ensureDataDir();
-  if (!fs.existsSync(STORAGE_FILE)) {
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify({}, null, 2));
-  }
-};
+interface UrlStore {
+  [key: string]: UrlData;
+}
 
-// Load data from file
-export const loadUrlStore = (): Record<string, any> => {
+export function loadUrlStore(): UrlStore {
   try {
-    initializeStorage();
-    const data = fs.readFileSync(STORAGE_FILE, 'utf-8');
-    return JSON.parse(data);
+    if (fs.existsSync(STORE_FILE)) {
+      const data = fs.readFileSync(STORE_FILE, 'utf8');
+      const store = JSON.parse(data);
+      Log({
+        stack: "backend",
+        level: "info",
+        package: "utils",
+        message: `URL store loaded successfully with ${Object.keys(store).length} entries`
+      });
+      return store;
+    }
   } catch (error) {
-    console.error('Error loading URL store:', error);
-    return {};
+    Log({
+      stack: "backend",
+      level: "error",
+      package: "utils",
+      message: `Failed to load URL store: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
   }
-};
+  return {};
+}
 
-// Save data to file
-export const saveUrlStore = (data: Record<string, any>): void => {
+export function saveUrlStore(store: UrlStore): void {
   try {
-    ensureDataDir();
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2));
+    const dir = path.dirname(STORE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2));
+    Log({
+      stack: "backend",
+      level: "info",
+      package: "utils",
+      message: `URL store saved successfully with ${Object.keys(store).length} entries`
+    });
   } catch (error) {
-    console.error('Error saving URL store:', error);
+    Log({
+      stack: "backend",
+      level: "error",
+      package: "utils",
+      message: `Failed to save URL store: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
   }
-};
-
-// Initialize storage on module load
-initializeStorage(); 
+} 

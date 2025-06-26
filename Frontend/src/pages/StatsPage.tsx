@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ExternalLink, Globe, Clock, Eye } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { logger } from '../utils/logger';
 
 const API_BASE = 'http://localhost:5000';
 
@@ -25,17 +26,27 @@ function StatsPage() {
     const fetchId = id || statsId;
     if (!fetchId) {
       setError('Please enter a short URL ID.');
+      logger.warn('page', 'Stats fetch attempted without ID');
       return;
     }
+
+    logger.info('page', `Fetching stats for ID: ${fetchId}`);
     setLoading(true);
+    
     try {
       const res = await fetch(`${API_BASE}/shorturls/${fetchId}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch stats');
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch stats');
+      }
+      
       setStats(data);
+      logger.info('page', `Successfully fetched stats for ID ${fetchId}: ${data.visits} visits`);
     } catch (e) {
-      if (e instanceof Error) setError(e.message);
-      else setError('Unknown error');
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+      setError(errorMessage);
+      logger.error('page', `Failed to fetch stats: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -45,6 +56,7 @@ function StatsPage() {
     const params = new URLSearchParams(location.search);
     const id = params.get('id');
     if (id) {
+      logger.info('page', `Auto-fetching stats for ID from URL: ${id}`);
       setStatsId(id);
       handleFetchStats(id);
     }

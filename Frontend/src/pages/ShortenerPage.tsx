@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Copy, BarChart3, ExternalLink, Globe } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { logger } from '../utils/logger';
 
 const API_BASE = 'http://localhost:5000';
 
@@ -19,9 +20,13 @@ function ShortenerPage() {
     setCreatedId(null);
     if (!originalUrl) {
       setError('Please enter a URL.');
+      logger.warn('page', 'URL shortening attempted with empty URL');
       return;
     }
+
+    logger.info('page', `Attempting to shorten URL: ${originalUrl}`);
     setLoading(true);
+    
     try {
       const res = await fetch(`${API_BASE}/shorturls`, {
         method: 'POST',
@@ -29,12 +34,18 @@ function ShortenerPage() {
         body: JSON.stringify({ originalUrl }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create short URL');
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create short URL');
+      }
+      
       setShortUrl(data.shortUrl);
       setCreatedId(data.id);
+      logger.info('page', `Successfully created short URL: ${data.shortUrl} (ID: ${data.id})`);
     } catch (e) {
-      if (e instanceof Error) setError(e.message);
-      else setError('Unknown error');
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+      setError(errorMessage);
+      logger.error('page', `Failed to create short URL: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -42,9 +53,14 @@ function ShortenerPage() {
 
   const copyToClipboard = async () => {
     if (shortUrl) {
-      await navigator.clipboard.writeText(shortUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(shortUrl);
+        setCopied(true);
+        logger.info('page', `Short URL copied to clipboard: ${shortUrl}`);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (e) {
+        logger.error('page', 'Failed to copy URL to clipboard');
+      }
     }
   };
 
@@ -78,7 +94,10 @@ function ShortenerPage() {
           <div className="shorturl-row">
             <h3 className="shorturl-title">Your short URL is ready!</h3>
             <button
-              onClick={() => navigate(`/stats?id=${createdId}`)}
+              onClick={() => {
+                logger.info('page', `Navigating to stats page for ID: ${createdId}`);
+                navigate(`/stats?id=${createdId}`);
+              }}
               className="stats-btn"
             >
               <BarChart3 className="icon-bar" />
@@ -91,6 +110,7 @@ function ShortenerPage() {
               target="_blank"
               rel="noopener noreferrer"
               className="shorturl-link"
+              onClick={() => logger.info('page', `Short URL clicked: ${shortUrl}`)}
             >
               {shortUrl}
             </a>
@@ -107,6 +127,7 @@ function ShortenerPage() {
               rel="noopener noreferrer"
               className="open-btn"
               title="Open in new tab"
+              onClick={() => logger.info('page', `Short URL opened in new tab: ${shortUrl}`)}
             >
               <ExternalLink className="icon-ext" />
             </a>

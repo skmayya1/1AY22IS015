@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { nanoid } from 'nanoid';
 import { loadUrlStore, saveUrlStore } from '../utils/storage';
+import { Log } from '../../../MiddlewareLogger';
 
 const router = Router();
 
@@ -19,9 +20,15 @@ const saveChanges = () => {
   saveUrlStore(urlStore);
 };
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   const { originalUrl, expiryMinutes } = req.body;
   if (!originalUrl) {
+    await Log({
+      stack: "backend",
+      level: "error",
+      package: "route",
+      message: "URL shortening failed: originalUrl is missing"
+    });
     res.status(400).json({ error: 'originalUrl is required' });
     return;
   }
@@ -37,22 +44,31 @@ router.post('/', (req: Request, res: Response) => {
     visits: 0,
     referers: [],
     timestamps: [],
-    expiresAt,
+    expiresAt: expiresAt.toISOString(),
   };
 
   // Save changes to file
   saveChanges();
 
   const baseUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+  const shortUrl = `${baseUrl}/${id}`;
+  
+  await Log({
+    stack: "backend",
+    level: "info",
+    package: "route",
+    message: `URL shortened successfully: ${originalUrl} -> ${shortUrl}`
+  });
+
   res.status(201).json({ 
     id, 
-    shortUrl: `${baseUrl}/${id}`, 
+    shortUrl, 
     originalUrl,
     expiresAt 
   });
 });
 
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const data = urlStore[id];
   
@@ -60,10 +76,30 @@ router.get('/:id', (req: Request, res: Response) => {
     if (data) {
       delete urlStore[id];
       saveChanges();
+      await Log({
+        stack: "backend",
+        level: "info",
+        package: "route",
+        message: `Expired URL removed: ${id}`
+      });
+    } else {
+      await Log({
+        stack: "backend",
+        level: "warn",
+        package: "route",
+        message: `URL not found: ${id}`
+      });
     }
     res.status(404).json({ error: 'Short URL not found or expired' });
     return;
   }
+
+  await Log({
+    stack: "backend",
+    level: "info",
+    package: "route",
+    message: `URL details retrieved: ${id} (visits: ${data.visits})`
+  });
 
   res.json({
     id,
